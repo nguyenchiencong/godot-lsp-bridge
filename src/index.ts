@@ -21,7 +21,10 @@ async function main(): Promise<void> {
   const stdinParser = new MessageParser();
   
   let isConnected = false;
+  let isInitialized = false;
   let reconnectTimer: NodeJS.Timeout | null = null;
+  let pendingGodotData: Buffer[] = [];
+  let pendingClientMessages: string[] = [];
 
   const log = (...args: unknown[]): void => {
     if (config.debug) {
@@ -29,18 +32,39 @@ async function main(): Promise<void> {
     }
   };
 
-  // Connect stdin parser to TCP connection
-  stdinParser.on('message', (content: string) => {
-    log('stdin -> Godot:', content.slice(0, 100) + (content.length > 100 ? '...' : ''));
-    
-    if (!isConnected) {
-      log('Dropping message - not connected');
-      return;
+  const sendToGodot = (content: string): void => {
+    // Check if this is an initialize request
+    try {
+      const parsed = JSON.parse(content);
+      if (parsed.method === 'initialize') {
+        isInitialized = true;
+        log('Initialize request received, flushing', pendingGodotData.length, 'pending Godot messages');
+        // Flush any pending Godot data that arrived before initialize
+        for (const data of pendingGodotData) {
+          process.stdout.write(data);
+        }
+        pendingGodotData = [];
+      }
+    } catch {
+      // Not valid JSON, just forward it
     }
 
     // Re-encode with Content-Length header and send to Godot
     const encoded = encodeMessage(content);
     connection.write(encoded);
+  };
+
+  // Connect stdin parser to TCP connection
+  stdinParser.on('message', (content: string) => {
+    log('stdin -> Godot:', content.slice(0, 100) + (content.length > 100 ? '...' : ''));
+    
+    if (!isConnected) {
+      log('Buffering message - not yet connected');
+      pendingClientMessages.push(content);
+      return;
+    }
+
+    sendToGodot(content);
   });
 
   stdinParser.on('error', (err: Error) => {
@@ -48,9 +72,24 @@ async function main(): Promise<void> {
   });
 
   // Forward TCP data directly to stdout (already has Content-Length headers)
+  // Buffer data until we receive the initialize request to avoid confusing the client
   connection.on('data', (data: Buffer) => {
     log('Godot -> stdout:', data.length, 'bytes');
+    if (!isInitialized) {
+      log('Buffering Godot data until initialize request');
+      pendingGodotData.push(data);
+      return;
+    }
     process.stdout.write(data);
+  });
+
+  // When connected, flush any pending client messages
+  connection.on('connect', () => {
+    log('Connected, flushing', pendingClientMessages.length, 'pending client messages');
+    for (const content of pendingClientMessages) {
+      sendToGodot(content);
+    }
+    pendingClientMessages = [];
   });
 
   // Handle connection close with auto-reconnect
@@ -85,6 +124,14 @@ async function main(): Promise<void> {
     log('Connection error:', err.message);
   });
 
+  // Set up stdin handlers BEFORE connecting to avoid race conditions
+  // Messages received while connecting will be buffered in the parser
+  process.stdin.setEncoding('utf8');
+  process.stdin.on('data', (chunk: string) => {
+    log('Received from stdin:', chunk.length, 'bytes');
+    stdinParser.feed(chunk);
+  });
+
   // Initial connection
   try {
     const port = await connection.connect();
@@ -110,13 +157,6 @@ async function main(): Promise<void> {
 
     reconnectTimer = setTimeout(reconnect, RECONNECT_DELAY);
   }
-
-  // Read from stdin and feed to parser
-  process.stdin.setEncoding('utf8');
-  process.stdin.on('data', (chunk: string) => {
-    log('Received from stdin:', chunk.length, 'bytes');
-    stdinParser.feed(chunk);
-  });
 
   // Cleanup on exit
   let cleanupCalled = false;

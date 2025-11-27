@@ -4,7 +4,7 @@
 export interface BridgeConfig {
   /** Godot LSP host (default: 127.0.0.1) */
   host: string;
-  /** Godot LSP port (default: 6007) */
+  /** Godot LSP port (default: 6005) */
   port: number;
   /** Fallback ports to try if main port fails */
   fallbackPorts: number[];
@@ -17,8 +17,10 @@ export interface BridgeConfig {
  */
 export function getConfig(): BridgeConfig {
   const envPort = process.env.GODOT_LSP_PORT;
-  let port = 6007;
-  let fallbackPorts = [6005, 6008];
+  // Godot 4.x uses port 6005 for LSP by default
+  // Port 6007 is the debugger port, not LSP
+  let port = 6005;
+  let fallbackPorts = [6007, 6008];
 
   if (envPort) {
     const parsed = parseInt(envPort, 10);
