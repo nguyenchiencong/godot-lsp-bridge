@@ -1,0 +1,36 @@
+{
+  "name": "godot-lsp-bridge",
+  "version": "0.1.0",
+  "description": "TCP-to-stdio bridge for Godot's LSP server",
+  "main": "dist/index.js",
+  "type": "module",
+  "bin": {
+    "godot-lsp-bridge": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "test": "tsx --test tests/**/*.test.ts",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\""
+  },
+  "keywords": [
+    "godot",
+    "gdscript",
+    "lsp",
+    "language-server",
+    "bridge",
+    "stdio",
+    "tcp"
+  ],
+  "author": "can0pus",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "tsx": "^4.19.0"
+  }
+}
