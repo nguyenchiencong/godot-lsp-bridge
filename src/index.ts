@@ -7,12 +7,74 @@ import { MessageParser, encodeMessage } from './message-parser.js';
 const RECONNECT_DELAY = 5000; // 5 seconds
 
 /**
+ * Normalize Windows file URIs for Godot's LSP server.
+ * 
+ * Godot expects file URIs in the format: file:///C:/path/to/file
+ * But some clients send: file://C:\path\to\file or file://C:/path/to/file
+ * 
+ * This function:
+ * 1. Ensures three slashes after file:
+ * 2. Converts backslashes to forward slashes
+ */
+function normalizeFileUri(uri: string): string {
+  if (!uri.startsWith('file://')) {
+    return uri;
+  }
+
+  // Remove the file:// prefix
+  let path = uri.slice(7);
+  
+  // Convert backslashes to forward slashes
+  path = path.replace(/\\/g, '/');
+  
+  // Ensure the path starts with a slash (for file:///)
+  // On Windows, paths like C:/... need a leading slash: /C:/...
+  if (path.length > 0 && path[0] !== '/') {
+    path = '/' + path;
+  }
+  
+  return 'file://' + path;
+}
+
+/**
+ * Recursively normalize all file URIs in an object.
+ * Looks for common LSP URI fields: uri, rootUri, rootPath, documentUri, etc.
+ */
+function normalizeUrisInObject(obj: unknown): unknown {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+  
+  if (typeof obj === 'string') {
+    // Check if this looks like a file URI
+    if (obj.startsWith('file://')) {
+      return normalizeFileUri(obj);
+    }
+    return obj;
+  }
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => normalizeUrisInObject(item));
+  }
+  
+  if (typeof obj === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      result[key] = normalizeUrisInObject(value);
+    }
+    return result;
+  }
+  
+  return obj;
+}
+
+/**
  * Main entry point for the Godot LSP Bridge.
  * 
  * This bridge connects LSP clients (via stdio) to Godot's LSP server (via TCP).
  * 
  * Data flow:
- *   LSP Client (stdin) -> Bridge -> Godot LSP (TCP port 6007)
+ *   LSP Client (stdin) -> Bridge -> Godot LSP (TCP port 6005)
  *   Godot LSP (TCP) -> Bridge -> LSP Client (stdout)
  */
 async function main(): Promise<void> {
@@ -33,9 +95,12 @@ async function main(): Promise<void> {
   };
 
   const sendToGodot = (content: string): void => {
-    // Check if this is an initialize request
+    // Parse and normalize URIs for Godot compatibility
+    let normalizedContent = content;
     try {
       const parsed = JSON.parse(content);
+      
+      // Check if this is an initialize request
       if (parsed.method === 'initialize') {
         isInitialized = true;
         log('Initialize request received, flushing', pendingGodotData.length, 'pending Godot messages');
@@ -45,12 +110,20 @@ async function main(): Promise<void> {
         }
         pendingGodotData = [];
       }
+      
+      // Normalize all file URIs in the message
+      const normalized = normalizeUrisInObject(parsed);
+      normalizedContent = JSON.stringify(normalized);
+      
+      if (normalizedContent !== content) {
+        log('Normalized URIs in message');
+      }
     } catch {
-      // Not valid JSON, just forward it
+      // Not valid JSON, just forward it as-is
     }
 
     // Re-encode with Content-Length header and send to Godot
-    const encoded = encodeMessage(content);
+    const encoded = encodeMessage(normalizedContent);
     connection.write(encoded);
   };
 

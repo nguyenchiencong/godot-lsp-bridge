@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] - 2025-11-27
+
+### Fixed
+
+- Fixed Windows file URI compatibility with Godot's LSP server
+  - Godot expects `file:///C:/path` format but some clients send `file://C:\path` or `file://C:/path`
+  - The bridge now automatically normalizes all file URIs to the correct format
+  - Converts backslashes to forward slashes
+  - Ensures three slashes after `file:` prefix
+
 ## [0.2.0] - 2025-11-27
 
 ### Fixed
