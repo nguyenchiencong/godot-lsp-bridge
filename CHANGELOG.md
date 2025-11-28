@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.2] - 2025-11-28
+
+### Fixed
+
+- Fixed Godot restart causing errors and hangs
+  - When Godot restarts, the bridge now properly resets its initialization state
+  - Previously, the bridge would forward requests to a freshly-restarted Godot before it received an `initialize` request, causing Godot to error and hang
+  - The bridge now buffers client messages until a new `initialize` request is received after reconnection
+
+### Added
+
+- Warning notification sent to LSP client when Godot restarts, informing user they may need to reopen files for diagnostics
+
 ## [0.2.1] - 2025-11-27
 
 ### Fixed

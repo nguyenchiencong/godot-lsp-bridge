@@ -168,6 +168,13 @@ async function main(): Promise<void> {
   // Handle connection close with auto-reconnect
   connection.on('close', () => {
     isConnected = false;
+    
+    // Reset initialization state - Godot may have restarted
+    // The client will need to send a new initialize request
+    const wasInitialized = isInitialized;
+    isInitialized = false;
+    pendingGodotData = [];
+    
     console.error('Connection to Godot LSP closed');
 
     if (!connection.shouldReconnect()) {
@@ -183,6 +190,21 @@ async function main(): Promise<void> {
         const port = await connection.connect();
         console.error(`Reconnected to Godot LSP on port ${port}`);
         isConnected = true;
+        
+        // Notify the client that the server restarted (if we were previously initialized)
+        if (wasInitialized) {
+          log('Server restarted, notifying client');
+          const notification = {
+            jsonrpc: '2.0',
+            method: 'window/showMessage',
+            params: {
+              type: 2, // Warning
+              message: 'Godot LSP server restarted. You may need to reopen files for diagnostics.'
+            }
+          };
+          const encoded = encodeMessage(JSON.stringify(notification));
+          process.stdout.write(encoded);
+        }
       } catch (err) {
         const error = err as Error;
         log('Reconnect failed:', error.message);
