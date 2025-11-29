@@ -175,6 +175,10 @@ async function main(): Promise<void> {
     isInitialized = false;
     pendingGodotData = [];
     
+    // Clear any buffered client messages - they're stale and would overwhelm
+    // Godot with thousands of outdated requests when we reconnect
+    pendingClientMessages = [];
+    
     console.error('Connection to Godot LSP closed');
 
     if (!connection.shouldReconnect()) {

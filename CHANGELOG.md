@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.3] - 2025-11-29
+
+### Fixed
+
+- Fixed thousands of Godot debugger errors on reconnect
+  - When Godot was closed while OpenCode was active, the bridge would buffer all client messages
+  - On reconnect, these stale messages would flood Godot, causing thousands of debugger errors
+  - Now clears buffered client messages on disconnect since they're outdated and irrelevant after Godot restarts
+
 ## [0.2.2] - 2025-11-28
 
 ### Fixed
