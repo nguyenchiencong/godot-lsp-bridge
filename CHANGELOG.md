@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.4] - 2025-11-30
+
+### Fixed
+
+- Fixed Godot debugger errors (`remote_debugger_peer.cpp:138`) caused by fallback port misconfiguration
+  - Removed port 6007 from fallback ports - this is Godot's debugger port, not LSP
+  - The bridge was accidentally connecting to the debugger port and sending LSP messages, causing protocol mismatch errors
+  - Now only connects to port 6005 (the correct LSP port)
+
+### Changed
+
+- Added 1-second warmup delay after reconnection before forwarding messages to Godot
+  - Gives Godot time to fully initialize its LSP server
+  - Prevents message flooding that could cause instability
+
 ## [0.2.3] - 2025-11-29
 
 ### Fixed
@@ -61,6 +76,5 @@ All notable changes to this project will be documented in this file.
 - Initial release
 - TCP-to-stdio bridge for Godot's LSP server
 - Auto-reconnection when Godot restarts
-- Port discovery (tries 6005, 6007, 6008)
 - Graceful degradation when Godot is not running
 - Zero runtime dependencies

@@ -18,9 +18,9 @@ export interface BridgeConfig {
 export function getConfig(): BridgeConfig {
   const envPort = process.env.GODOT_LSP_PORT;
   // Godot 4.x uses port 6005 for LSP by default
-  // Port 6007 is the debugger port, not LSP
+  // Port 6007 is the debugger port, NOT LSP - do not use as fallback!
   let port = 6005;
-  let fallbackPorts = [6007, 6008];
+  let fallbackPorts: number[] = []; // No fallbacks - 6005 is the only LSP port
 
   if (envPort) {
     const parsed = parseInt(envPort, 10);

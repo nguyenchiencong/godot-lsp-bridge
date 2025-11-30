@@ -5,6 +5,7 @@ import { LSPConnection } from './lsp-connection.js';
 import { MessageParser, encodeMessage } from './message-parser.js';
 
 const RECONNECT_DELAY = 5000; // 5 seconds
+const WARMUP_DELAY = 1000; // 1 second delay after reconnect before accepting messages
 
 /**
  * Normalize Windows file URIs for Godot's LSP server.
@@ -84,6 +85,8 @@ async function main(): Promise<void> {
   
   let isConnected = false;
   let isInitialized = false;
+  let isReconnecting = false; // Track if this is a reconnection vs initial connection
+  let isWarmingUp = false; // Delay message forwarding after reconnect
   let reconnectTimer: NodeJS.Timeout | null = null;
   let pendingGodotData: Buffer[] = [];
   let pendingClientMessages: string[] = [];
@@ -131,8 +134,8 @@ async function main(): Promise<void> {
   stdinParser.on('message', (content: string) => {
     log('stdin -> Godot:', content.slice(0, 100) + (content.length > 100 ? '...' : ''));
     
-    if (!isConnected) {
-      log('Buffering message - not yet connected');
+    if (!isConnected || isWarmingUp) {
+      log('Buffering message -', !isConnected ? 'not yet connected' : 'warming up after reconnect');
       pendingClientMessages.push(content);
       return;
     }
@@ -156,13 +159,36 @@ async function main(): Promise<void> {
     process.stdout.write(data);
   });
 
-  // When connected, flush any pending client messages
+  // When connected, flush any pending client messages (only on initial connection)
   connection.on('connect', () => {
-    log('Connected, flushing', pendingClientMessages.length, 'pending client messages');
-    for (const content of pendingClientMessages) {
-      sendToGodot(content);
+    if (isReconnecting) {
+      // After a reconnect, don't flush stale messages - they would overwhelm Godot
+      // Wait for client to send fresh initialize request
+      log('Reconnected - clearing', pendingClientMessages.length, 'stale pending messages');
+      pendingClientMessages = [];
+      isReconnecting = false;
+      
+      // Give Godot time to fully initialize before we start sending messages
+      // This helps prevent debugger errors from message flooding
+      isWarmingUp = true;
+      log('Waiting', WARMUP_DELAY, 'ms for Godot to stabilize...');
+      setTimeout(() => {
+        isWarmingUp = false;
+        log('Warmup complete, flushing', pendingClientMessages.length, 'buffered messages');
+        // Now flush any messages that came in during warmup
+        for (const content of pendingClientMessages) {
+          sendToGodot(content);
+        }
+        pendingClientMessages = [];
+      }, WARMUP_DELAY);
+    } else {
+      // Initial connection - flush pending messages (should include initialize)
+      log('Connected, flushing', pendingClientMessages.length, 'pending client messages');
+      for (const content of pendingClientMessages) {
+        sendToGodot(content);
+      }
+      pendingClientMessages = [];
     }
-    pendingClientMessages = [];
   });
 
   // Handle connection close with auto-reconnect
@@ -186,6 +212,7 @@ async function main(): Promise<void> {
     }
 
     console.error(`Attempting to reconnect in ${RECONNECT_DELAY / 1000}s...`);
+    isReconnecting = true; // Mark that next connection is a reconnect
     
     const reconnect = async (): Promise<void> => {
       if (!connection.shouldReconnect()) return;
