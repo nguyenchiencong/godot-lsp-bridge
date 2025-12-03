@@ -29,31 +29,36 @@ export class LSPConnection extends EventEmitter {
   }
 
   /**
-   * Get all ports to try (main port + fallbacks)
+   * Sleep for a given number of milliseconds
    */
-  private getPortsToTry(): number[] {
-    return [this.config.port, ...this.config.fallbackPorts];
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   /**
-   * Connect to Godot LSP server (tries multiple ports)
+   * Connect to Godot LSP server with retry logic
    */
   async connect(): Promise<number> {
-    const ports = this.getPortsToTry();
+    const { port, connectRetries, retryDelay } = this.config;
 
-    for (const port of ports) {
+    for (let attempt = 1; attempt <= connectRetries; attempt++) {
       try {
         await this.tryConnect(port);
         this.connectedPort = port;
-        this.log(`Connected to Godot LSP on port ${port}`);
+        this.log(`Connected to Godot LSP on port ${port} (attempt ${attempt}/${connectRetries})`);
         return port;
       } catch {
-        this.log(`Failed to connect on port ${port}`);
+        this.log(`Connection attempt ${attempt}/${connectRetries} failed on port ${port}`);
+        
+        if (attempt < connectRetries) {
+          this.log(`Retrying in ${retryDelay}ms...`);
+          await this.sleep(retryDelay);
+        }
       }
     }
 
     throw new Error(
-      `Could not connect to Godot LSP server. Tried ports: ${ports.join(', ')}. ` +
+      `Could not connect to Godot LSP server on port ${port} after ${connectRetries} attempts. ` +
       `Make sure Godot Editor is running with the project open.`
     );
   }

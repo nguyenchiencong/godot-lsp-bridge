@@ -6,8 +6,10 @@ export interface BridgeConfig {
   host: string;
   /** Godot LSP port (default: 6005) */
   port: number;
-  /** Fallback ports to try if main port fails */
-  fallbackPorts: number[];
+  /** Number of connection retry attempts before giving up (default: 3) */
+  connectRetries: number;
+  /** Delay between retry attempts in ms (default: 1000) */
+  retryDelay: number;
   /** Enable debug logging */
   debug: boolean;
 }
@@ -18,9 +20,8 @@ export interface BridgeConfig {
 export function getConfig(): BridgeConfig {
   const envPort = process.env.GODOT_LSP_PORT;
   // Godot 4.x uses port 6005 for LSP by default
-  // Port 6007 is the debugger port, NOT LSP - do not use as fallback!
+  // Port 6007 is the debugger port, NOT LSP - never connect to it!
   let port = 6005;
-  let fallbackPorts: number[] = []; // No fallbacks - 6005 is the only LSP port
 
   if (envPort) {
     const parsed = parseInt(envPort, 10);
@@ -28,13 +29,13 @@ export function getConfig(): BridgeConfig {
       throw new Error(`Invalid GODOT_LSP_PORT: ${envPort} (must be 1-65535)`);
     }
     port = parsed;
-    fallbackPorts = []; // Don't use fallbacks if port is explicitly set
   }
 
   return {
     host: process.env.GODOT_LSP_HOST || '127.0.0.1',
     port,
-    fallbackPorts,
+    connectRetries: 3,
+    retryDelay: 1000,
     debug: process.env.GODOT_LSP_DEBUG === '1' || process.env.GODOT_LSP_DEBUG === 'true',
   };
 }

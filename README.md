@@ -59,14 +59,14 @@ Add to your project's `opencode.json`:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `GODOT_LSP_HOST` | Godot LSP host | `127.0.0.1` |
-| `GODOT_LSP_PORT` | Godot LSP port | `6005` (tries 6007, 6008 as fallback) |
+| `GODOT_LSP_PORT` | Godot LSP port | `6005` |
 | `GODOT_LSP_DEBUG` | Enable debug logging | `false` |
 
 ## Features
 
 - **Zero runtime dependencies** - Uses only Node.js built-ins
 - **Auto-reconnection** - Automatically reconnects if Godot restarts
-- **Port discovery** - Tries common Godot LSP ports if default fails
+- **Connection retry** - Retries connection 3 times with 1-second delays before entering reconnect loop
 - **Graceful degradation** - Waits for Godot if not running at startup
 - **Windows URI normalization** - Fixes file path compatibility issues
 

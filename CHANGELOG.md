@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.5] - 2025-12-03
+
+### Changed
+
+- Replaced fallback port logic with retry attempts on the configured port
+  - Previously tried multiple ports sequentially; now retries the same port 3 times with 1-second delays
+  - This prevents accidentally connecting to Godot's debugger port (6007) or other services
+  - Connection flow: attempt 1 → wait 1s → attempt 2 → wait 1s → attempt 3 → fail or enter reconnect loop
+
+### Removed
+
+- Removed `fallbackPorts` configuration option (no longer needed)
+
 ## [0.2.4] - 2025-11-30
 
 ### Fixed
